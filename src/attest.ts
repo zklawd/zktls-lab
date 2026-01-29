@@ -1,117 +1,101 @@
 /**
- * zkTLS Attestation Generator
+ * zkTLS Attestation - Using Primus SDK to generate attestations
  * 
- * Generates a zkTLS attestation for a public API endpoint using Primus Core SDK.
- * The attestation can then be verified with a Noir circuit.
+ * Project: zkTLS Test
+ * Created: 2026-01-29
  */
 
-import { PrimusCoreTLS } from '@primuslabs/zktls-core-sdk';
-import * as fs from 'fs';
-import * as path from 'path';
+import { PrimusCoreTLS } from "@primuslabs/zktls-core-sdk";
 
-// Configuration - set via environment variables
+// Credentials from Primus Developer Hub (Backend Project)
+// Store in Bitwarden: "Primus zkTLS - zkTLS Test"
 const APP_ID = process.env.PRIMUS_APP_ID;
 const APP_SECRET = process.env.PRIMUS_APP_SECRET;
-const USER_ADDRESS = process.env.USER_ADDRESS || '0x0000000000000000000000000000000000000000';
 
-// Target API - CoinGecko public endpoint (no auth required)
-const TARGET_REQUEST = {
-  url: 'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd',
-  method: 'GET',
-  header: '',
-  body: ''
-};
-
-// What to extract from the response
-// Response format: {"ethereum":{"usd":3456.78}}
-const RESPONSE_RESOLVES = [
-  {
-    keyName: 'eth_price_usd',
-    parsePath: '$.ethereum.usd'
-  }
-];
+if (!APP_ID || !APP_SECRET) {
+  console.error("Missing PRIMUS_APP_ID or PRIMUS_APP_SECRET environment variables");
+  console.error("Get them from Bitwarden: rbw get --full 'Primus zkTLS - zkTLS Test'");
+  process.exit(1);
+}
 
 async function main() {
-  console.log('🔐 zkTLS Attestation Generator\n');
+  console.log("=== Primus zkTLS Attestation Demo ===\n");
 
-  // Validate credentials
-  if (!APP_ID || !APP_SECRET) {
-    console.error('❌ Missing credentials!');
-    console.error('Set PRIMUS_APP_ID and PRIMUS_APP_SECRET environment variables.');
-    console.error('\nGet credentials from: https://dev.primuslabs.xyz');
-    process.exit(1);
-  }
+  // Initialize the SDK
+  console.log("1. Initializing PrimusCoreTLS...");
+  const zkTLS = new PrimusCoreTLS();
+  const initResult = await zkTLS.init(APP_ID, APP_SECRET);
+  console.log("   Init result:", initResult);
 
-  console.log('📋 Configuration:');
-  console.log(`   App ID: ${APP_ID.substring(0, 8)}...`);
-  console.log(`   Target: ${TARGET_REQUEST.url}`);
-  console.log(`   Extract: ${RESPONSE_RESOLVES.map(r => r.keyName).join(', ')}\n`);
+  // Set up request to a public API
+  // Using httpbin.org for reliable testing
+  const request = {
+    url: "https://httpbin.org/json",
+    method: "GET",
+    header: {
+      "Accept": "application/json"
+    },
+    body: ""
+  };
 
-  // Initialize SDK
-  console.log('🚀 Initializing Primus Core SDK...');
-  const primus = new PrimusCoreTLS();
-  
-  try {
-    await primus.init(APP_ID, APP_SECRET);
-    console.log('✅ SDK initialized\n');
-  } catch (error) {
-    console.error('❌ Failed to initialize SDK:', error);
-    process.exit(1);
-  }
+  // Define what we want to prove about the response
+  // httpbin returns: { "slideshow": { "author": "...", "title": "..." } }
+  const responseResolves = [
+    {
+      keyName: 'slideshow_title',
+      parsePath: '$.slideshow.title'
+    }
+  ];
+
+  console.log("\n2. Configuring attestation request...");
+  console.log("   URL:", request.url);
+  console.log("   Extracting:", responseResolves[0].parsePath);
 
   // Generate attestation request
-  console.log('📝 Generating attestation request...');
-  const attRequest = primus.generateRequestParams(
-    TARGET_REQUEST,
-    RESPONSE_RESOLVES,
-    USER_ADDRESS
-  );
+  const generateRequest = zkTLS.generateRequestParams(request, responseResolves);
 
-  // Set attestation mode (proxy is faster, mpc is more secure)
-  attRequest.setAttMode({ algorithmType: 'proxytls' });
-  
-  console.log('✅ Request generated\n');
-  console.log('Request:', JSON.stringify(JSON.parse(attRequest.toJsonString()), null, 2), '\n');
+  // Set zkTLS mode (proxy mode is the default)
+  generateRequest.setAttMode({
+    algorithmType: "proxytls"
+  });
 
-  // Start attestation
-  console.log('⏳ Starting attestation (this may take 30-60 seconds)...');
-  const startTime = Date.now();
-  
+  console.log("\n3. Starting attestation process...");
+  console.log("   (This may take a moment...)\n");
+
   try {
-    const attestation = await primus.startAttestation(attRequest, 120000); // 2 min timeout
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    // Start attestation - this contacts Primus network
+    const attestation = await zkTLS.startAttestation(generateRequest);
     
-    console.log(`✅ Attestation complete! (${elapsed}s)\n`);
-    
-    // Verify the attestation locally
-    console.log('🔍 Verifying attestation signature...');
-    const isValid = primus.verifyAttestation(attestation);
-    console.log(`✅ Signature valid: ${isValid}\n`);
+    console.log("=== ATTESTATION RECEIVED ===");
+    console.log(JSON.stringify(attestation, null, 2));
 
-    // Save attestation to file
-    const filename = `attestation_${Date.now()}.json`;
-    const filepath = path.join(process.cwd(), 'attestations', filename);
-    
-    fs.writeFileSync(filepath, JSON.stringify(attestation, null, 2));
-    console.log(`💾 Saved to: ${filepath}\n`);
+    // Verify the attestation
+    console.log("\n4. Verifying attestation...");
+    const verifyResult = zkTLS.verifyAttestation(attestation);
+    console.log("   Verification result:", verifyResult);
 
-    // Print summary
-    console.log('📊 Attestation Summary:');
-    console.log(`   Recipient: ${attestation.recipient}`);
-    console.log(`   Timestamp: ${new Date(attestation.timestamp).toISOString()}`);
-    console.log(`   Attestor: ${attestation.attestors?.[0]?.attestorAddr || 'N/A'}`);
-    console.log(`   Data: ${JSON.stringify(attestation.data || attestation.reponseResolve)}`);
+    if (verifyResult === true) {
+      console.log("\n✅ SUCCESS: Attestation verified!");
+      
+      // Extract the attested data
+      if (attestation.data?.response) {
+        console.log("\n📊 Attested Data:");
+        console.log("   ETH/USD price:", attestation.data.response.ethereum_usd_price);
+      }
 
-    return attestation;
-  } catch (error: any) {
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.error(`❌ Attestation failed after ${elapsed}s:`, error.message || error);
-    
-    if (error.code) {
-      console.error(`   Error code: ${error.code}`);
+      // Save attestation for later use with Noir circuit
+      const fs = await import('fs');
+      const outputPath = './attestation-output.json';
+      fs.writeFileSync(outputPath, JSON.stringify(attestation, null, 2));
+      console.log(`\n💾 Attestation saved to: ${outputPath}`);
+
+    } else {
+      console.log("\n❌ FAILED: Attestation verification failed");
     }
-    
-    process.exit(1);
+
+  } catch (error) {
+    console.error("\n❌ Error during attestation:", error);
+    throw error;
   }
 }
 

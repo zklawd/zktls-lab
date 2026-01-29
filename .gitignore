@@ -7,8 +7,11 @@ dist/
 # Noir
 noir/target/
 noir/proofs/
+noir/Prover.toml
 noir/Verifier.toml
+noir/noir-inputs.json
 
-# Generated
+# Generated attestations (contain session-specific data)
+attestation-output.json
 attestations/*.json
 !attestations/.gitkeep
