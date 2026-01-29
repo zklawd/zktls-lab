@@ -117,11 +117,48 @@ These versions work together:
 
 Install nargo with: `noirup -v 1.0.0-beta.0`
 
+## Getting Live Attestations
+
+To generate real attestations (not just verify example data):
+
+### 1. Get Primus Developer Hub Credentials
+
+1. Go to https://dev.primuslabs.xyz
+2. Connect wallet (MetaMask, etc.)
+3. Click "New Backend Project"
+4. Save your `appId` and `appSecret` (shown only once!)
+
+### 2. Set Environment Variables
+
+```bash
+export PRIMUS_APP_ID="your-app-id"
+export PRIMUS_APP_SECRET="your-app-secret"
+```
+
+### 3. Generate Attestation
+
+```bash
+npm run attest
+```
+
+This will:
+- Hit a public API (CoinGecko ETH price by default)
+- Generate a zkTLS attestation through Primus
+- Save the attestation JSON to `attestations/`
+
+### 4. Verify with Noir
+
+```bash
+npm run parse -- attestations/attestation_*.json
+npm run prove
+```
+
 ## Next Steps
 
-- [ ] Generate attestations from live APIs (needs Primus Developer Hub credentials)
-- [ ] Add URL allowlist verification
-- [ ] Add JSON parsing in circuit for response data verification
+- [ ] Get Primus Developer Hub credentials (requires wallet)
+- [ ] Generate live attestation from public API
+- [ ] Add URL allowlist verification in circuit
+- [ ] Add JSON parsing in circuit for response data
 - [ ] Deploy verifier to EVM chains
 
 ## References
