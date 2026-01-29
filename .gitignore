@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.log
+.env
+.env.local
+
+# Noir
+noir/target/
+noir/proofs/
+noir/Verifier.toml
+
+# Generated
+attestations/*.json
+!attestations/.gitkeep

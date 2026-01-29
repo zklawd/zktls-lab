@@ -1,0 +1,24 @@
+{
+  "name": "zktls-lab",
+  "version": "0.1.0",
+  "description": "zkTLS experiments with Primus + Noir verification",
+  "type": "module",
+  "scripts": {
+    "attest": "tsx src/attest.ts",
+    "parse": "tsx src/parse-attestation.ts",
+    "prove": "tsx src/prove.ts",
+    "execute": "cd noir && $HOME/.nargo/bin/nargo execute",
+    "build:noir": "cd noir && $HOME/.nargo/bin/nargo compile"
+  },
+  "dependencies": {
+    "@aztec/bb.js": "^0.63.1",
+    "@noir-lang/noir_js": "^1.0.0-beta.0",
+    "@primuslabs/zktls-core-sdk": "^0.2.6",
+    "ethers": "^5.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

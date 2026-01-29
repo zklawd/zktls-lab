@@ -1,0 +1,6 @@
+[package]
+name = "zktls_verifier"
+type = "bin"
+authors = ["zklawd"]
+
+[dependencies]
