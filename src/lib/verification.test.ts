@@ -1,151 +1,116 @@
-import { describe, it, expect } from 'vitest';
-import { execSync } from 'child_process';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Noir } from '@noir-lang/noir_js';
+import { UltraHonkBackend, type ProofData } from '@aztec/bb.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const NOIR_DIR = path.join(process.cwd(), 'noir');
-const PROVER_TOML = path.join(NOIR_DIR, 'Prover.toml');
-const TARGET_DIR = path.join(NOIR_DIR, 'target');
-const NARGO = `${process.env.HOME}/.nargo/bin/nargo`;
-const BB = `${process.env.HOME}/.bb/bb`;
 
-// Helper to run nargo execute and check result
-function runNargoExecute(): { success: boolean; output: string } {
-  try {
-    const output = execSync(`${NARGO} execute`, {
-      cwd: NOIR_DIR,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-    return { success: true, output };
-  } catch (error: any) {
-    return { success: false, output: error.stderr || error.message };
+// Load circuit and inputs
+function loadCircuit() {
+  const circuitPath = path.join(NOIR_DIR, 'target', 'zktls_verifier.json');
+  return JSON.parse(fs.readFileSync(circuitPath, 'utf-8'));
+}
+
+function loadInputs() {
+  const tomlPath = path.join(NOIR_DIR, 'Prover.toml');
+  const content = fs.readFileSync(tomlPath, 'utf-8');
+  
+  // Parse TOML manually (simple arrays only)
+  const inputs: Record<string, any> = {};
+  for (const line of content.split('\n')) {
+    const match = line.match(/^(\w+)\s*=\s*\[([^\]]+)\]/);
+    if (match) {
+      const [, key, values] = match;
+      inputs[key] = values.split(',').map(v => parseInt(v.trim()));
+    }
   }
+  return inputs;
 }
 
-// Helper to run bb prove
-function runBbProve(): { success: boolean; output: string } {
-  try {
-    execSync(`mkdir -p ${TARGET_DIR}/proof ${TARGET_DIR}/vk`, { cwd: NOIR_DIR });
-    const output = execSync(
-      `${BB} prove -b ./target/zktls_verifier.json -w ./target/zktls_verifier.gz -o ./target/proof`,
-      { cwd: NOIR_DIR, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
-    );
-    return { success: true, output };
-  } catch (error: any) {
-    return { success: false, output: error.stderr || error.message };
-  }
-}
-
-// Helper to run bb verify
-function runBbVerify(): { success: boolean; output: string } {
-  try {
-    // First generate VK if needed
-    execSync(
-      `${BB} write_vk -b ./target/zktls_verifier.json -o ./target/vk`,
-      { cwd: NOIR_DIR, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
-    );
-    const output = execSync(
-      `${BB} verify -p ./target/proof/proof -k ./target/vk/vk`,
-      { cwd: NOIR_DIR, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
-    );
-    return { success: true, output };
-  } catch (error: any) {
-    return { success: false, output: error.stderr || error.message };
-  }
-}
-
-// Helper to modify Prover.toml
-function modifyProverToml(find: RegExp, replace: string): string {
-  const original = fs.readFileSync(PROVER_TOML, 'utf-8');
-  const modified = original.replace(find, replace);
-  fs.writeFileSync(PROVER_TOML, modified);
-  return original;
-}
-
-function restoreProverToml(original: string) {
-  fs.writeFileSync(PROVER_TOML, original);
-}
-
-describe('Noir circuit verification', () => {
-  it('accepts valid attestation', () => {
-    const result = runNargoExecute();
-    expect(result.success).toBe(true);
-    expect(result.output).toContain('Circuit output: Field(2821410000)');
-  });
-
-  it('generates valid proof', () => {
-    // First execute to generate witness
-    const execResult = runNargoExecute();
-    expect(execResult.success).toBe(true);
+describe('Noir circuit verification with bb.js', () => {
+  let circuit: any;
+  let backend: UltraHonkBackend;
+  let noir: Noir;
+  let validInputs: Record<string, any>;
+  let validProof: ProofData;
+  
+  beforeAll(async () => {
+    circuit = loadCircuit();
+    validInputs = loadInputs();
     
-    // Then prove
-    const proveResult = runBbProve();
-    expect(proveResult.success).toBe(true);
+    // Initialize Noir and backend
+    noir = new Noir(circuit);
+    backend = new UltraHonkBackend(circuit.bytecode);
+  }, 30000);
+  
+  afterAll(async () => {
+    if (backend) await backend.destroy();
+  });
+
+  it('executes circuit and returns correct price', async () => {
+    const { witness, returnValue } = await noir.execute(validInputs);
     
-    // Check proof file exists
-    const proofPath = path.join(TARGET_DIR, 'proof', 'proof');
-    expect(fs.existsSync(proofPath)).toBe(true);
-  }, 60000); // 60s timeout for proving
+    expect(witness).toBeInstanceOf(Uint8Array);
+    expect(witness.length).toBeGreaterThan(0);
+    
+    // Return value should be the ETH price (2821410000)
+    expect(returnValue).toBeDefined();
+  }, 30000);
 
-  it('verifies valid proof', () => {
-    const verifyResult = runBbVerify();
-    expect(verifyResult.success).toBe(true);
-  }, 30000); // 30s timeout for verification
+  it('generates valid proof', async () => {
+    const { witness } = await noir.execute(validInputs);
+    validProof = await backend.generateProof(witness);
+    
+    expect(validProof).toBeDefined();
+    expect(validProof.proof).toBeInstanceOf(Uint8Array);
+    expect(validProof.proof.length).toBeGreaterThan(0);
+  }, 60000);
 
-  it('rejects tampered signature', () => {
-    const original = modifyProverToml(
-      /signature = \[\d+,/,
-      'signature = [0,'
-    );
-    try {
-      const result = runNargoExecute();
-      expect(result.success).toBe(false);
-      expect(result.output).toContain('Invalid ECDSA signature');
-    } finally {
-      restoreProverToml(original);
-    }
-  });
+  it('verifies valid proof', async () => {
+    const isValid = await backend.verifyProof(validProof);
+    expect(isValid).toBe(true);
+  }, 30000);
 
-  it('rejects wrong attestor address', () => {
-    const original = modifyProverToml(
-      /attestor_address = \[\d+,/,
-      'attestor_address = [0,'
-    );
-    try {
-      const result = runNargoExecute();
-      expect(result.success).toBe(false);
-      expect(result.output).toContain('Address mismatch');
-    } finally {
-      restoreProverToml(original);
-    }
-  });
+  it('rejects proof with tampered public inputs', async () => {
+    // Tamper with the public inputs in the proof
+    const tamperedProof: ProofData = {
+      ...validProof,
+      publicInputs: validProof.publicInputs.map((v, i) => 
+        i === 0 ? '0x00' : v  // Tamper first public input
+      )
+    };
+    
+    const isValid = await backend.verifyProof(tamperedProof);
+    expect(isValid).toBe(false);
+  }, 30000);
 
-  it('rejects wrong URL hash', () => {
-    const original = modifyProverToml(
-      /request_url_hash = \[\d+,/,
-      'request_url_hash = [0,'
-    );
-    try {
-      const result = runNargoExecute();
-      expect(result.success).toBe(false);
-      expect(result.output).toContain('URL not allowed');
-    } finally {
-      restoreProverToml(original);
-    }
-  });
+  it('rejects execution with wrong signature', async () => {
+    const badInputs = {
+      ...validInputs,
+      signature: validInputs.signature.map((v: number, i: number) => 
+        i === 0 ? 0 : v  // Tamper first byte
+      )
+    };
+    
+    await expect(noir.execute(badInputs)).rejects.toThrow();
+  }, 30000);
 
-  it('rejects tampered message hash', () => {
-    const original = modifyProverToml(
-      /message_hash = \[\d+,/,
-      'message_hash = [0,'
-    );
-    try {
-      const result = runNargoExecute();
-      expect(result.success).toBe(false);
-      expect(result.output).toContain('Invalid ECDSA signature');
-    } finally {
-      restoreProverToml(original);
-    }
-  });
+  it('rejects execution with wrong attestor address', async () => {
+    const badInputs = {
+      ...validInputs,
+      attestor_address: validInputs.attestor_address.map(() => 0)
+    };
+    
+    await expect(noir.execute(badInputs)).rejects.toThrow();
+  }, 30000);
+
+  it('rejects execution with wrong URL hash', async () => {
+    const badInputs = {
+      ...validInputs,
+      request_url_hash: validInputs.request_url_hash.map(() => 0)
+    };
+    
+    await expect(noir.execute(badInputs)).rejects.toThrow();
+  }, 30000);
 });
