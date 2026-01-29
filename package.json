@@ -4,9 +4,10 @@
   "description": "zkTLS experiments with Primus + Noir verification",
   "type": "module",
   "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
     "attest": "tsx src/attest.ts",
     "parse": "tsx src/parse-attestation.ts",
-    "prove": "tsx src/prove.ts",
     "execute": "cd noir && $HOME/.nargo/bin/nargo execute",
     "build:noir": "cd noir && $HOME/.nargo/bin/nargo compile"
   },
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^4.0.18"
   }
 }
