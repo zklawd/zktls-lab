@@ -5,7 +5,9 @@ import * as path from 'path';
 
 const NOIR_DIR = path.join(process.cwd(), 'noir');
 const PROVER_TOML = path.join(NOIR_DIR, 'Prover.toml');
+const TARGET_DIR = path.join(NOIR_DIR, 'target');
 const NARGO = `${process.env.HOME}/.nargo/bin/nargo`;
+const BB = `${process.env.HOME}/.bb/bb`;
 
 // Helper to run nargo execute and check result
 function runNargoExecute(): { success: boolean; output: string } {
@@ -15,6 +17,38 @@ function runNargoExecute(): { success: boolean; output: string } {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe']
     });
+    return { success: true, output };
+  } catch (error: any) {
+    return { success: false, output: error.stderr || error.message };
+  }
+}
+
+// Helper to run bb prove
+function runBbProve(): { success: boolean; output: string } {
+  try {
+    execSync(`mkdir -p ${TARGET_DIR}/proof ${TARGET_DIR}/vk`, { cwd: NOIR_DIR });
+    const output = execSync(
+      `${BB} prove -b ./target/zktls_verifier.json -w ./target/zktls_verifier.gz -o ./target/proof`,
+      { cwd: NOIR_DIR, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    return { success: true, output };
+  } catch (error: any) {
+    return { success: false, output: error.stderr || error.message };
+  }
+}
+
+// Helper to run bb verify
+function runBbVerify(): { success: boolean; output: string } {
+  try {
+    // First generate VK if needed
+    execSync(
+      `${BB} write_vk -b ./target/zktls_verifier.json -o ./target/vk`,
+      { cwd: NOIR_DIR, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    );
+    const output = execSync(
+      `${BB} verify -p ./target/proof/proof -k ./target/vk/vk`,
+      { cwd: NOIR_DIR, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
+    );
     return { success: true, output };
   } catch (error: any) {
     return { success: false, output: error.stderr || error.message };
@@ -39,6 +73,25 @@ describe('Noir circuit verification', () => {
     expect(result.success).toBe(true);
     expect(result.output).toContain('Circuit output: Field(2821410000)');
   });
+
+  it('generates valid proof', () => {
+    // First execute to generate witness
+    const execResult = runNargoExecute();
+    expect(execResult.success).toBe(true);
+    
+    // Then prove
+    const proveResult = runBbProve();
+    expect(proveResult.success).toBe(true);
+    
+    // Check proof file exists
+    const proofPath = path.join(TARGET_DIR, 'proof', 'proof');
+    expect(fs.existsSync(proofPath)).toBe(true);
+  }, 60000); // 60s timeout for proving
+
+  it('verifies valid proof', () => {
+    const verifyResult = runBbVerify();
+    expect(verifyResult.success).toBe(true);
+  }, 30000); // 30s timeout for verification
 
   it('rejects tampered signature', () => {
     const original = modifyProverToml(
