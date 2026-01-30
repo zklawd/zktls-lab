@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrimusCoreTLS } from '@primuslabs/zktls-core-sdk';
 import { Noir } from '@noir-lang/noir_js';
-import { UltraHonkBackend, type ProofData } from '@aztec/bb.js';
+import { UltraHonkBackend } from '@aztec/bb.js';
 import { ethers } from 'ethers';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const NOIR_DIR = path.join(process.cwd(), 'noir');
+const MAX_URL_LEN = 256;
+const MAX_DATA_LEN = 256;
 
-// Must set these env vars
 const APP_ID = process.env.PRIMUS_APP_ID;
 const APP_SECRET = process.env.PRIMUS_APP_SECRET;
 
@@ -22,6 +24,15 @@ function hexToArray(hex: string): number[] {
   const arr: number[] = [];
   for (let i = 0; i < h.length; i += 2) arr.push(parseInt(h.substr(i, 2), 16));
   return arr;
+}
+
+function stringToBytes(str: string, maxLen: number): number[] {
+  const bytes = Buffer.from(str, 'utf-8');
+  const padded = new Array(maxLen).fill(0);
+  for (let i = 0; i < Math.min(bytes.length, maxLen); i++) {
+    padded[i] = bytes[i];
+  }
+  return padded;
 }
 
 function encodeAttestation(att: any): string {
@@ -88,7 +99,8 @@ describe('zkTLS end-to-end', () => {
     generateRequest.setAttMode({ algorithmType: "proxytls" });
     
     const attestation = await zkTLS.startAttestation(generateRequest);
-    console.log('\n📊 Attested ETH/USD:', parsePrice(attestation.data).raw);
+    const price = parsePrice(attestation.data);
+    console.log('\n📊 Attested ETH/USD:', price.raw);
     
     // Verify SDK signature check passes
     expect(zkTLS.verifyAttestation(attestation)).toBe(true);
@@ -97,23 +109,29 @@ describe('zkTLS end-to-end', () => {
     const msgHash = encodeAttestation(attestation);
     const sig = attestation.signatures[0];
     const pubKey = ethers.utils.recoverPublicKey(msgHash, sig);
-    const price = parsePrice(attestation.data);
-    const dataHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(attestation.data));
-    const urlHash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(attestation.request.url));
-
+    
+    // SHA256 of zero-padded response
+    const paddedResponse = Buffer.alloc(MAX_DATA_LEN, 0);
+    Buffer.from(attestation.data).copy(paddedResponse, 0, 0, Math.min(attestation.data.length, MAX_DATA_LEN));
+    const dataHash = crypto.createHash('sha256').update(paddedResponse).digest();
+    
+    const allowedUrl = "https://api.kraken.com/";
     const sigBytes = hexToArray(sig);
     const pubKeyBytes = hexToArray(pubKey);
 
     const inputs = {
-      message_hash: hexToArray(msgHash),
-      attestor_address: hexToArray(attestation.attestors[0].attestorAddr),
-      allowed_url_hash: hexToArray(urlHash),
-      data_hash: hexToArray(dataHash),
+      hash: hexToArray(msgHash),
+      allowed_url: stringToBytes(allowedUrl, MAX_URL_LEN),
+      allowed_url_len: Buffer.from(allowedUrl).length,
+      data_hash: Array.from(dataHash),
       eth_usd_price: price.bytes,
       signature: sigBytes.slice(0, 64),
       public_key_x: pubKeyBytes.slice(1, 33),
       public_key_y: pubKeyBytes.slice(33, 65),
-      request_url_hash: hexToArray(urlHash),
+      request_url: stringToBytes(attestation.request.url, MAX_URL_LEN),
+      request_url_len: Buffer.from(attestation.request.url).length,
+      plain_response: stringToBytes(attestation.data, MAX_DATA_LEN),
+      plain_response_len: Buffer.from(attestation.data).length,
     };
 
     // 3. Execute circuit
@@ -130,5 +148,5 @@ describe('zkTLS end-to-end', () => {
     const valid = await backend.verifyProof(proof);
     console.log('✓ Proof verified:', valid);
     expect(valid).toBe(true);
-  }, 120000); // 2 min timeout for full e2e
+  }, 120000);
 });

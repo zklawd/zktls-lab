@@ -4,3 +4,4 @@ type = "bin"
 authors = ["zklawd"]
 
 [dependencies]
+string_search = { tag = "v0.3.3", git = "https://github.com/noir-lang/noir_string_search" }
