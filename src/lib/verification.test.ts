@@ -149,4 +149,63 @@ describe('zkTLS end-to-end', () => {
     console.log('✓ Proof verified:', valid);
     expect(valid).toBe(true);
   }, 120000);
+
+  it('rejects fake price', async () => {
+    // 1. Get attestation
+    const zkTLS = new PrimusCoreTLS();
+    await zkTLS.init(APP_ID!, APP_SECRET!);
+
+    const request = {
+      url: "https://api.kraken.com/0/public/Ticker?pair=ETHUSD",
+      method: "GET",
+      header: { "Accept": "application/json" },
+      body: ""
+    };
+    const responseResolves = [{ keyName: 'eth_usd_price', parsePath: '$.result.XETHZUSD.c[0]' }];
+    
+    const generateRequest = zkTLS.generateRequestParams(request, responseResolves);
+    generateRequest.setAttMode({ algorithmType: "proxytls" });
+    
+    const attestation = await zkTLS.startAttestation(generateRequest);
+    const realPrice = parsePrice(attestation.data);
+    console.log('\n📊 Real price:', realPrice.raw);
+
+    // 2. Build inputs with FAKE price
+    const msgHash = encodeAttestation(attestation);
+    const sig = attestation.signatures[0];
+    const pubKey = ethers.utils.recoverPublicKey(msgHash, sig);
+    
+    const paddedResponse = Buffer.alloc(MAX_DATA_LEN, 0);
+    Buffer.from(attestation.data).copy(paddedResponse, 0, 0, Math.min(attestation.data.length, MAX_DATA_LEN));
+    const dataHash = crypto.createHash('sha256').update(paddedResponse).digest();
+    
+    const allowedUrl = "https://api.kraken.com/";
+    const sigBytes = hexToArray(sig);
+    const pubKeyBytes = hexToArray(pubKey);
+
+    // FAKE price - 9999.00 USD
+    const fakePrice = 9999000000;
+    const fakePriceBytes: number[] = [];
+    let v = BigInt(fakePrice);
+    for (let i = 0; i < 8; i++) { fakePriceBytes.unshift(Number(v & 0xFFn)); v >>= 8n; }
+
+    const inputs = {
+      hash: hexToArray(msgHash),
+      allowed_url: stringToBytes(allowedUrl, MAX_URL_LEN),
+      allowed_url_len: Buffer.from(allowedUrl).length,
+      data_hash: Array.from(dataHash),
+      eth_usd_price: fakePriceBytes, // FAKE!
+      signature: sigBytes.slice(0, 64),
+      public_key_x: pubKeyBytes.slice(1, 33),
+      public_key_y: pubKeyBytes.slice(33, 65),
+      request_url: stringToBytes(attestation.request.url, MAX_URL_LEN),
+      request_url_len: Buffer.from(attestation.request.url).length,
+      plain_response: stringToBytes(attestation.data, MAX_DATA_LEN),
+      plain_response_len: Buffer.from(attestation.data).length,
+    };
+
+    // 3. Execution should fail
+    await expect(noir.execute(inputs)).rejects.toThrow();
+    console.log('✓ Correctly rejected fake price');
+  }, 120000);
 });
