@@ -18,21 +18,21 @@ jobs:
         with:
           toolchain: 1.0.0-beta.18
       
-      - name: Compile zktls_verifier
+      - name: Compile all Noir circuits
         run: |
-          cd noir/zktls_verifier
-          nargo compile
+          cd noir
+          nargo compile --workspace
       
-      - name: Run Noir tests (if any)
+      - name: Run Noir tests
         run: |
-          cd noir/zktls_verifier
-          nargo test || echo "No tests found"
+          cd noir
+          nargo test --workspace || echo "No tests found"
       
       - name: Upload compiled circuits
         uses: actions/upload-artifact@v4
         with:
           name: noir-artifacts
-          path: noir/zktls_verifier/target/
+          path: noir/target/
           retention-days: 1
 
   solidity-compile:
@@ -73,12 +73,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: noir-artifacts
-          path: noir/zktls_verifier/target/
-      
-      - name: Also copy to noir/target for legacy paths
-        run: |
-          mkdir -p noir/target
-          cp -r noir/zktls_verifier/target/* noir/target/ || true
+          path: noir/target/
       
       - name: Install dependencies
         run: npm ci
