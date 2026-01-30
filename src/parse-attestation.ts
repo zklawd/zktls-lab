@@ -1,9 +1,10 @@
 /**
  * Parse Primus zkTLS attestation into Noir circuit inputs
  * Compatible with verify_attestation_hashing pattern
+ * Updated for ethers v6
  */
 import * as fs from 'fs';
-import { ethers } from 'ethers';
+import { ethers, SigningKey } from 'ethers';
 import * as crypto from 'crypto';
 
 const MAX_URL_LEN = 256;
@@ -38,17 +39,17 @@ function stringToBytes(str: string, maxLen: number): number[] {
 }
 
 function encodeAttestation(att: Attestation): string {
-  const encodeRequest = (r: any) => ethers.utils.keccak256(
-    ethers.utils.solidityPack(["string", "string", "string", "string"], [r.url, r.header, r.method, r.body])
+  const encodeRequest = (r: any) => ethers.keccak256(
+    ethers.solidityPacked(["string", "string", "string", "string"], [r.url, r.header, r.method, r.body])
   );
   const encodeResponse = (res: any[]) => {
     let data = "0x";
     for (const r of res) {
-      data = ethers.utils.solidityPack(["bytes", "string", "string", "string"], [data, r.keyName, r.parseType, r.parsePath]);
+      data = ethers.solidityPacked(["bytes", "string", "string", "string"], [data, r.keyName, r.parseType, r.parsePath]);
     }
-    return ethers.utils.keccak256(data);
+    return ethers.keccak256(data);
   };
-  return ethers.utils.keccak256(ethers.utils.solidityPack(
+  return ethers.keccak256(ethers.solidityPacked(
     ["address", "bytes32", "bytes32", "string", "string", "uint64", "string"],
     [att.recipient, encodeRequest(att.request), encodeResponse(att.reponseResolve),
      att.data, att.attConditions, att.timestamp, att.additionParams]
@@ -74,10 +75,12 @@ async function main() {
   // Compute hashes
   const msgHash = encodeAttestation(att);
   const sig = att.signatures[0];
-  const pubKey = ethers.utils.recoverPublicKey(msgHash, sig);
+  
+  // ethers v6: recoverPublicKey is on SigningKey
+  const pubKey = SigningKey.recoverPublicKey(msgHash, sig);
   
   // Verify signature
-  const recovered = ethers.utils.recoverAddress(msgHash, sig);
+  const recovered = ethers.recoverAddress(msgHash, sig);
   console.log('Attestor:', att.attestors[0].attestorAddr);
   console.log('Recovered:', recovered);
   console.log('Match:', recovered.toLowerCase() === att.attestors[0].attestorAddr.toLowerCase());

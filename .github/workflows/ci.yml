@@ -83,11 +83,9 @@ jobs:
       
       - name: Run Vitest tests (src/)
         run: npx vitest run --exclude 'test/**'
-        continue-on-error: true
       
       - name: Run Hardhat tests (test/)
         run: npx hardhat test
-        continue-on-error: true
         
       - name: Check Primus credentials available
         if: always()

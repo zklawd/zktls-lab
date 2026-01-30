@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrimusCoreTLS } from '@primuslabs/zktls-core-sdk';
 import { Noir } from '@noir-lang/noir_js';
 import { UltraHonkBackend } from '@aztec/bb.js';
-import { ethers } from 'ethers';
+import { ethers, SigningKey } from 'ethers';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -36,17 +36,18 @@ function toBoundedVec(str: string, maxLen: number): { len: number; storage: numb
 }
 
 function encodeAttestation(att: any): string {
-  const encodeRequest = (r: any) => ethers.utils.keccak256(
-    ethers.utils.solidityPack(["string", "string", "string", "string"], [r.url, r.header, r.method, r.body])
+  // ethers v6 API: solidityPacked instead of utils.solidityPack, keccak256 at top level
+  const encodeRequest = (r: any) => ethers.keccak256(
+    ethers.solidityPacked(["string", "string", "string", "string"], [r.url, r.header, r.method, r.body])
   );
   const encodeResponse = (res: any[]) => {
     let data = "0x";
     for (const r of res) {
-      data = ethers.utils.solidityPack(["bytes", "string", "string", "string"], [data, r.keyName, r.parseType, r.parsePath]);
+      data = ethers.solidityPacked(["bytes", "string", "string", "string"], [data, r.keyName, r.parseType, r.parsePath]);
     }
-    return ethers.utils.keccak256(data);
+    return ethers.keccak256(data);
   };
-  return ethers.utils.keccak256(ethers.utils.solidityPack(
+  return ethers.keccak256(ethers.solidityPacked(
     ["address", "bytes32", "bytes32", "string", "string", "uint64", "string"],
     [att.recipient, encodeRequest(att.request), encodeResponse(att.reponseResolve),
      att.data, att.attConditions, att.timestamp, att.additionParams]
@@ -106,7 +107,7 @@ describe('zkTLS with packed public inputs', () => {
     // 2. Build circuit inputs
     const msgHash = encodeAttestation(attestation);
     const sig = attestation.signatures[0];
-    const pubKey = ethers.utils.recoverPublicKey(msgHash, sig);
+    const pubKey = SigningKey.recoverPublicKey(msgHash, sig);
     const sigBytes = hexToArray(sig);
     const pubKeyBytes = hexToArray(pubKey);
 
