@@ -229,13 +229,19 @@ fn parse_price(data: BoundedVec<u8, MAX_CONTENT_LEN>) -> u64 {
     let mut done = false;
     let mut parsed_any_digit = false;
     
+    let mut skip_next = false;  // For handling escape sequences
     for i in 0..50 { // Max 50 chars for a price string
         let pos = value_start + i;
         if (pos < data_len) & !done {
             let c = data.get(pos);
             
-            // Stop at closing quote or non-digit/non-decimal
-            if (c == 34) | (c == 125) | (c == 44) { // " or } or ,
+            if skip_next {
+                // This char is escaped, skip it
+                skip_next = false;
+            } else if c == 92 { // '\' backslash - escape sequence
+                // Skip the next character (handles \" inside strings)
+                skip_next = true;
+            } else if (c == 34) | (c == 125) | (c == 44) { // " or } or , (unescaped)
                 done = true;
             } else if c == 46 { // '.'
                 in_decimal = true;
@@ -251,7 +257,7 @@ fn parse_price(data: BoundedVec<u8, MAX_CONTENT_LEN>) -> u64 {
                     integer_part = integer_part * 10 + digit;
                 }
             }
-            // Skip backslash escapes and other chars
+            // Skip other chars (whitespace, etc.)
         }
     }
     
