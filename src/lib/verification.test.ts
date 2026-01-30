@@ -61,11 +61,11 @@ function parsePrice(data: string): { raw: string; u64: number } {
   return { raw: priceStr, u64 };
 }
 
-function sha256Hash(data: string): number[] {
+function sha256Hash(data: Buffer): number[] {
   return Array.from(crypto.createHash('sha256').update(data).digest());
 }
 
-describe('zkTLS with att_verifier_lib', () => {
+describe('zkTLS with packed public inputs', () => {
   let circuit: any;
   let backend: UltraHonkBackend;
   let noir: Noir;
@@ -83,7 +83,7 @@ describe('zkTLS with att_verifier_lib', () => {
     if (backend) await backend.destroy();
   });
 
-  it('verifies attestation and extracts price', async () => {
+  it('verifies attestation with packed public inputs', async () => {
     // 1. Get attestation
     const zkTLS = new PrimusCoreTLS();
     await zkTLS.init(APP_ID!, APP_SECRET!);
@@ -110,13 +110,17 @@ describe('zkTLS with att_verifier_lib', () => {
     const sigBytes = hexToArray(sig);
     const pubKeyBytes = hexToArray(pubKey);
 
-    // URLs - fill all slots with valid URLs (library doesn't support empty needles)
+    // Attestor address
+    const attestorAddr = hexToArray(attestation.attestors[0].attestorAddr);
+    console.log('Attestor:', attestation.attestors[0].attestorAddr);
+
+    // URLs
     const requestUrl = toBoundedVec(attestation.request.url, MAX_URL_LEN);
     const allowedUrl = toBoundedVec("https://api.kraken.com/", MAX_URL_LEN);
 
-    // Response data - use same data twice
+    // Response data
     const responseData = toBoundedVec(attestation.data, MAX_CONTENT_LEN);
-    const dataHash = sha256Hash(attestation.data);
+    const dataHash = sha256Hash(Buffer.from(attestation.data));
 
     const inputs = {
       public_key_x: pubKeyBytes.slice(1, 33),
@@ -127,20 +131,29 @@ describe('zkTLS with att_verifier_lib', () => {
       allowed_urls: [allowedUrl, allowedUrl, allowedUrl],
       data_hashes: [dataHash, dataHash],
       plain_json_response_contents: [responseData, responseData],
+      expected_attestor: attestorAddr,
       claimed_price: price.u64,
     };
 
-    // 3. Execute
+    // 3. Execute - returns packed_inputs_hash
     const { witness, returnValue } = await noir.execute(inputs);
-    console.log('✓ Circuit executed, URL hashes:', returnValue);
-    
-    // 4. Prove
+    console.log('✓ Circuit executed');
+    console.log('  Packed inputs hash:', returnValue);
+
+    // 4. Generate proof
     const proof = await backend.generateProof(witness);
     console.log('✓ Proof generated');
-    
-    // 5. Verify
+
+    // 5. Verify proof
     const valid = await backend.verifyProof(proof);
     console.log('✓ Proof verified:', valid);
     expect(valid).toBe(true);
-  }, 180000);
+
+    // 6. Show what on-chain verification would check
+    console.log('\n📋 On-chain verification would check:');
+    console.log('  - Proof is valid');
+    console.log('  - Public inputs: attestor, price, packed_hash');
+    console.log('  - Recompute packed_hash from (price, attestor, url_hashes)');
+    console.log('  - Verify url_hashes are in allowed list');
+  }, 300000);
 });
