@@ -1,0 +1,3 @@
+# Test case: Standard JSON format
+# {"eth_usd_price":"3456.789012"}
+# The key "eth_usd_price" starts at position 2 (after opening brace and quote)

@@ -1,0 +1,223 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "/root/clawd/projects/zktls-lab/contracts/ZkTLSPriceOracle.sol": {
+      "lastModificationDate": 1769806524877,
+      "contentHash": "013a197ddace85b9ba185dda59eb60dc",
+      "sourceName": "contracts/ZkTLSPriceOracle.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 100000000
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [
+        "./ZkTLSVerifier.sol"
+      ],
+      "versionPragmas": [
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "ZkTLSPriceOracle"
+      ]
+    },
+    "/root/clawd/projects/zktls-lab/contracts/ZkTLSVerifier.sol": {
+      "lastModificationDate": 1769805568854,
+      "contentHash": "5626bf87eee5caf48105503cb48febdd",
+      "sourceName": "contracts/ZkTLSVerifier.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 100000000
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.8.21",
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "BaseHonkVerifier",
+        "CommitmentSchemeLib",
+        "FrLib",
+        "Honk",
+        "HonkVerificationKey",
+        "HonkVerifier",
+        "IVerifier",
+        "RelationsLib",
+        "TranscriptLib"
+      ]
+    },
+    "/root/clawd/projects/zktls-lab/noir/target/zktls_verifier.sol": {
+      "lastModificationDate": 1769806919384,
+      "contentHash": "7c8f77dfa2ac7e64703d566e135b1eb1",
+      "sourceName": "noir/target/zktls_verifier.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 100000000
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.8.21",
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "BaseHonkVerifier",
+        "CommitmentSchemeLib",
+        "FrLib",
+        "Honk",
+        "HonkVerificationKey",
+        "HonkVerifier",
+        "IVerifier",
+        "RelationsLib",
+        "TranscriptLib"
+      ]
+    },
+    "/root/clawd/projects/zktls-lab/noir/target/simple_test.sol": {
+      "lastModificationDate": 1769807560212,
+      "contentHash": "e717862a728803329e73a0c280710b0f",
+      "sourceName": "noir/target/simple_test.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 100000000
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.8.21",
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "BaseHonkVerifier",
+        "CommitmentSchemeLib",
+        "FrLib",
+        "Honk",
+        "HonkVerificationKey",
+        "HonkVerifier",
+        "IVerifier",
+        "RelationsLib",
+        "TranscriptLib"
+      ]
+    },
+    "/root/clawd/projects/zktls-lab/noir/target/simple_price.sol": {
+      "lastModificationDate": 1769807997452,
+      "contentHash": "bf6ebb036354ef63d4597c963f437304",
+      "sourceName": "noir/target/simple_price.sol",
+      "solcConfig": {
+        "version": "0.8.27",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 100000000
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        ">=0.8.21",
+        "^0.8.27"
+      ],
+      "artifacts": [
+        "BaseHonkVerifier",
+        "CommitmentSchemeLib",
+        "FrLib",
+        "Honk",
+        "HonkVerificationKey",
+        "HonkVerifier",
+        "IVerifier",
+        "RelationsLib",
+        "TranscriptLib"
+      ]
+    }
+  }
+}

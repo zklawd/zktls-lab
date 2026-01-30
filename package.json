@@ -11,26 +11,23 @@
     "execute": "cd noir && $HOME/.nargo/bin/nargo execute",
     "build:noir": "cd noir && $HOME/.nargo/bin/nargo compile",
     "generate:verifier": "tsx scripts/generate-verifier.ts",
-    "deploy": "tsx scripts/deploy.ts",
-    "compile:sol": "npx solc --optimize --optimize-runs 200 --bin --abi contracts/ZkTLSVerifier.sol contracts/ZkTLSPriceOracle.sol -o build/"
+    "deploy": "npx hardhat run scripts/deploy.ts --network localhost",
+    "compile": "npx hardhat compile"
   },
   "dependencies": {
-    "@aztec/bb.js": "^2.1.11",
+    "@aztec/bb.js": "^1.2.0",
     "@noble/curves": "^2.0.1",
-    "@noir-lang/noir_js": "^1.0.0-beta.18",
+    "@noir-lang/noir_js": "^1.0.0-beta.11",
     "@primuslabs/zktls-core-sdk": "^0.2.6",
-    "ethereum-cryptography": "^3.2.0"
+    "ethereum-cryptography": "^3.2.0",
+    "hardhat-noir": "^0.6.0"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-chai-matchers": "^2.1.0",
-    "@nomicfoundation/hardhat-ethers": "^4.0.4",
-    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@types/node": "^20.0.0",
-    "chai": "^6.2.2",
-    "ethers": "^6.16.0",
-    "hardhat": "^3.1.5",
+    "hardhat": "^2.22.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",
-    "vitest": "^4.0.18"
+    "vitest": "^2.0.0"
   }
 }

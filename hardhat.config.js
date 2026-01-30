@@ -1,15 +1,19 @@
 import "@nomicfoundation/hardhat-toolbox";
+import "hardhat-noir";
 
 /** @type import('hardhat/config').HardhatUserConfig */
 export default {
   solidity: {
-    version: "0.8.24",
+    version: "0.8.27",
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200
+        runs: 100000000  // High runs for verifier efficiency
       }
     }
+  },
+  noir: {
+    version: "1.0.0-beta.11",  // Match hardhat-noir's expected version
   },
   networks: {
     hardhat: {
@@ -31,6 +35,7 @@ export default {
     sources: "./contracts",
     tests: "./test",
     cache: "./cache",
-    artifacts: "./artifacts"
+    artifacts: "./artifacts",
+    noir: "./noir"  // Noir circuits location
   }
 };
