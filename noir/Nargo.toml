@@ -2,6 +2,7 @@
 name = "zktls_verifier"
 type = "bin"
 authors = ["zklawd"]
+compiler_version = ">=1.0.0"
 
 [dependencies]
-string_search = { tag = "v0.3.3", git = "https://github.com/noir-lang/noir_string_search" }
+att_verifier_lib = { tag = "main", git = "https://github.com/zklawd/zktls-verification-noir", directory = "att_verifier_lib" }

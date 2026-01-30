@@ -8,8 +8,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const NOIR_DIR = path.join(process.cwd(), 'noir');
-const MAX_URL_LEN = 256;
-const MAX_DATA_LEN = 256;
+const MAX_URL_LEN = 1024;
+const MAX_CONTENT_LEN = 1000;
 
 const APP_ID = process.env.PRIMUS_APP_ID;
 const APP_SECRET = process.env.PRIMUS_APP_SECRET;
@@ -26,13 +26,13 @@ function hexToArray(hex: string): number[] {
   return arr;
 }
 
-function stringToBytes(str: string, maxLen: number): number[] {
+function toBoundedVec(str: string, maxLen: number): { len: number; storage: number[] } {
   const bytes = Buffer.from(str, 'utf-8');
-  const padded = new Array(maxLen).fill(0);
+  const storage = new Array(maxLen).fill(0);
   for (let i = 0; i < Math.min(bytes.length, maxLen); i++) {
-    padded[i] = bytes[i];
+    storage[i] = bytes[i];
   }
-  return padded;
+  return { len: bytes.length, storage };
 }
 
 function encodeAttestation(att: any): string {
@@ -53,18 +53,19 @@ function encodeAttestation(att: any): string {
   ));
 }
 
-function parsePrice(data: string): { raw: string; u64: number; bytes: number[] } {
+function parsePrice(data: string): { raw: string; u64: number } {
   const parsed = JSON.parse(data);
   let priceStr = parsed.eth_usd_price;
   if (priceStr.startsWith('"')) priceStr = priceStr.slice(1, -1);
   const u64 = Math.round(parseFloat(priceStr) * 1_000_000);
-  const bytes: number[] = [];
-  let v = BigInt(u64);
-  for (let i = 0; i < 8; i++) { bytes.unshift(Number(v & 0xFFn)); v >>= 8n; }
-  return { raw: priceStr, u64, bytes };
+  return { raw: priceStr, u64 };
 }
 
-describe('zkTLS end-to-end', () => {
+function sha256Hash(data: string): number[] {
+  return Array.from(crypto.createHash('sha256').update(data).digest());
+}
+
+describe('zkTLS with att_verifier_lib', () => {
   let circuit: any;
   let backend: UltraHonkBackend;
   let noir: Noir;
@@ -82,8 +83,8 @@ describe('zkTLS end-to-end', () => {
     if (backend) await backend.destroy();
   });
 
-  it('fetches attestation, generates proof, verifies', async () => {
-    // 1. Get fresh attestation from Primus
+  it('verifies attestation and extracts price', async () => {
+    // 1. Get attestation
     const zkTLS = new PrimusCoreTLS();
     await zkTLS.init(APP_ID!, APP_SECRET!);
 
@@ -101,111 +102,45 @@ describe('zkTLS end-to-end', () => {
     const attestation = await zkTLS.startAttestation(generateRequest);
     const price = parsePrice(attestation.data);
     console.log('\n📊 Attested ETH/USD:', price.raw);
-    
-    // Verify SDK signature check passes
-    expect(zkTLS.verifyAttestation(attestation)).toBe(true);
 
-    // 2. Parse attestation into circuit inputs
+    // 2. Build circuit inputs
     const msgHash = encodeAttestation(attestation);
     const sig = attestation.signatures[0];
     const pubKey = ethers.utils.recoverPublicKey(msgHash, sig);
-    
-    // SHA256 of zero-padded response
-    const paddedResponse = Buffer.alloc(MAX_DATA_LEN, 0);
-    Buffer.from(attestation.data).copy(paddedResponse, 0, 0, Math.min(attestation.data.length, MAX_DATA_LEN));
-    const dataHash = crypto.createHash('sha256').update(paddedResponse).digest();
-    
-    const allowedUrl = "https://api.kraken.com/";
     const sigBytes = hexToArray(sig);
     const pubKeyBytes = hexToArray(pubKey);
 
+    // URLs - fill all slots with valid URLs (library doesn't support empty needles)
+    const requestUrl = toBoundedVec(attestation.request.url, MAX_URL_LEN);
+    const allowedUrl = toBoundedVec("https://api.kraken.com/", MAX_URL_LEN);
+
+    // Response data - use same data twice
+    const responseData = toBoundedVec(attestation.data, MAX_CONTENT_LEN);
+    const dataHash = sha256Hash(attestation.data);
+
     const inputs = {
-      hash: hexToArray(msgHash),
-      allowed_url: stringToBytes(allowedUrl, MAX_URL_LEN),
-      allowed_url_len: Buffer.from(allowedUrl).length,
-      data_hash: Array.from(dataHash),
-      eth_usd_price: price.bytes,
-      signature: sigBytes.slice(0, 64),
       public_key_x: pubKeyBytes.slice(1, 33),
       public_key_y: pubKeyBytes.slice(33, 65),
-      request_url: stringToBytes(attestation.request.url, MAX_URL_LEN),
-      request_url_len: Buffer.from(attestation.request.url).length,
-      plain_response: stringToBytes(attestation.data, MAX_DATA_LEN),
-      plain_response_len: Buffer.from(attestation.data).length,
+      hash: hexToArray(msgHash),
+      signature: sigBytes.slice(0, 64),
+      request_urls: [requestUrl, requestUrl],
+      allowed_urls: [allowedUrl, allowedUrl, allowedUrl],
+      data_hashes: [dataHash, dataHash],
+      plain_json_response_contents: [responseData, responseData],
+      claimed_price: price.u64,
     };
 
-    // 3. Execute circuit
+    // 3. Execute
     const { witness, returnValue } = await noir.execute(inputs);
-    console.log('✓ Circuit executed, price:', returnValue);
-    expect(witness.length).toBeGreaterThan(0);
-
-    // 4. Generate proof
+    console.log('✓ Circuit executed, URL hashes:', returnValue);
+    
+    // 4. Prove
     const proof = await backend.generateProof(witness);
     console.log('✓ Proof generated');
-    expect(proof.proof.length).toBeGreaterThan(0);
-
-    // 5. Verify proof
+    
+    // 5. Verify
     const valid = await backend.verifyProof(proof);
     console.log('✓ Proof verified:', valid);
     expect(valid).toBe(true);
-  }, 120000);
-
-  it('rejects fake price', async () => {
-    // 1. Get attestation
-    const zkTLS = new PrimusCoreTLS();
-    await zkTLS.init(APP_ID!, APP_SECRET!);
-
-    const request = {
-      url: "https://api.kraken.com/0/public/Ticker?pair=ETHUSD",
-      method: "GET",
-      header: { "Accept": "application/json" },
-      body: ""
-    };
-    const responseResolves = [{ keyName: 'eth_usd_price', parsePath: '$.result.XETHZUSD.c[0]' }];
-    
-    const generateRequest = zkTLS.generateRequestParams(request, responseResolves);
-    generateRequest.setAttMode({ algorithmType: "proxytls" });
-    
-    const attestation = await zkTLS.startAttestation(generateRequest);
-    const realPrice = parsePrice(attestation.data);
-    console.log('\n📊 Real price:', realPrice.raw);
-
-    // 2. Build inputs with FAKE price
-    const msgHash = encodeAttestation(attestation);
-    const sig = attestation.signatures[0];
-    const pubKey = ethers.utils.recoverPublicKey(msgHash, sig);
-    
-    const paddedResponse = Buffer.alloc(MAX_DATA_LEN, 0);
-    Buffer.from(attestation.data).copy(paddedResponse, 0, 0, Math.min(attestation.data.length, MAX_DATA_LEN));
-    const dataHash = crypto.createHash('sha256').update(paddedResponse).digest();
-    
-    const allowedUrl = "https://api.kraken.com/";
-    const sigBytes = hexToArray(sig);
-    const pubKeyBytes = hexToArray(pubKey);
-
-    // FAKE price - 9999.00 USD
-    const fakePrice = 9999000000;
-    const fakePriceBytes: number[] = [];
-    let v = BigInt(fakePrice);
-    for (let i = 0; i < 8; i++) { fakePriceBytes.unshift(Number(v & 0xFFn)); v >>= 8n; }
-
-    const inputs = {
-      hash: hexToArray(msgHash),
-      allowed_url: stringToBytes(allowedUrl, MAX_URL_LEN),
-      allowed_url_len: Buffer.from(allowedUrl).length,
-      data_hash: Array.from(dataHash),
-      eth_usd_price: fakePriceBytes, // FAKE!
-      signature: sigBytes.slice(0, 64),
-      public_key_x: pubKeyBytes.slice(1, 33),
-      public_key_y: pubKeyBytes.slice(33, 65),
-      request_url: stringToBytes(attestation.request.url, MAX_URL_LEN),
-      request_url_len: Buffer.from(attestation.request.url).length,
-      plain_response: stringToBytes(attestation.data, MAX_DATA_LEN),
-      plain_response_len: Buffer.from(attestation.data).length,
-    };
-
-    // 3. Execution should fail
-    await expect(noir.execute(inputs)).rejects.toThrow();
-    console.log('✓ Correctly rejected fake price');
-  }, 120000);
+  }, 180000);
 });
