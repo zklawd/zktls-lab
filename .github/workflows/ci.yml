@@ -49,7 +49,10 @@ jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
-    needs: [solidity-compile]
+    needs: [noir-compile, solidity-compile]
+    env:
+      PRIMUS_APP_ID: ${{ secrets.PRIMUS_APP_ID }}
+      PRIMUS_APP_SECRET: ${{ secrets.PRIMUS_APP_SECRET }}
     steps:
       - uses: actions/checkout@v4
       
@@ -59,8 +62,21 @@ jobs:
           node-version: '20'
           cache: 'npm'
       
+      - name: Install Nargo
+        uses: noir-lang/noirup@v0.1.4
+        with:
+          toolchain: 1.0.0-beta.18
+      
       - name: Install dependencies
         run: npm ci
       
-      - name: Run tests
-        run: npm test || echo "Tests skipped (may need env vars)"
+      - name: Run unit tests
+        run: npm test
+        
+      - name: Check Primus credentials available
+        run: |
+          if [ -z "$PRIMUS_APP_ID" ]; then
+            echo "⚠️ PRIMUS_APP_ID not set - integration tests will be skipped"
+          else
+            echo "✅ Primus credentials available"
+          fi
