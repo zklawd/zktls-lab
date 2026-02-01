@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/root/clawd/projects/zktls-lab/contracts/ZkTLSPriceOracle.sol": {
-      "lastModificationDate": 1769806524877,
-      "contentHash": "013a197ddace85b9ba185dda59eb60dc",
+      "lastModificationDate": 1769958618178,
+      "contentHash": "97aa959921e8123d38aebbc05a13bb47",
       "sourceName": "contracts/ZkTLSPriceOracle.sol",
       "solcConfig": {
         "version": "0.8.27",
@@ -85,8 +85,8 @@
       ]
     },
     "/root/clawd/projects/zktls-lab/noir/target/zktls_verifier.sol": {
-      "lastModificationDate": 1769806919384,
-      "contentHash": "7c8f77dfa2ac7e64703d566e135b1eb1",
+      "lastModificationDate": 1769958645998,
+      "contentHash": "f39cc10938b377d64d57545936bc96de",
       "sourceName": "noir/target/zktls_verifier.sol",
       "solcConfig": {
         "version": "0.8.27",
